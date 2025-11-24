@@ -1,4 +1,4 @@
-# ui_setup.py
+# Pixel Mask 4.0 UI setup code
 import tkinter as tk
 from PIL import Image, ImageTk
 import darkdetect

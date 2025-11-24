@@ -5,14 +5,14 @@ from threading import Thread
 import subprocess
 import queue
 import darkdetect
-import pm_text as pmt
+import ui_code.pm_text as pmt
 import base64
 import os
 from cryptography.hazmat.primitives import serialization
 from PIL import Image, ImageTk
 
 
-import encryption as enc
+import crypt_code.encryption as enc
 from stego_code import lsb_stego as lsb
 from stego_code import dct_stego as dct
 from ame_code import xor_rsa_ame as ame

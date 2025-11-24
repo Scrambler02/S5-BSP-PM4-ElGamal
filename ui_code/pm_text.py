@@ -1,4 +1,4 @@
-# Pixel Mask 3.0 - Output Texts
+# Pixel Mask 4.0 - Output Texts
 
 # ======== DEFAULT TEXTS ======== #
 

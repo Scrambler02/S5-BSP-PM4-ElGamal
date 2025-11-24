@@ -9,7 +9,7 @@ char_to_int = {
     'k': 37, 'l': 38, 'm': 39, 'n': 40, 'o': 41, 'p': 42, 'q': 43, 'r': 44, 's': 45, 't': 46,
     'u': 47, 'v': 48, 'w': 49, 'x': 50, 'y': 51, 'z': 52, 
     ' ': 53, '.': 54, '?': 55, '!': 56, "'": 57, ',': 58,
-    '1': 59, '2':60, '3':61
+    '0': 59, '1': 60, '2': 61, '3': 62, '4': 63, '5': 64, '6': 65, '7': 66, '9': 67, '5': 68
 }
 
 # Reverse dictionary: integers back to characters
@@ -17,7 +17,7 @@ int_to_char = {v: k for k, v in char_to_int.items()}
 
 # Encodes a string to a single int using the dictionary -> base-58 representation
 def encode_msg_to_int(msg: str):
-    base = 61
+    base = 68
     total = 0
     for char in msg:
         if char not in char_to_int:
@@ -27,7 +27,7 @@ def encode_msg_to_int(msg: str):
 
 # Decodes an int back to a string using the dictionary
 def decode_msg_to_int(encoded_int):
-    base = 61
+    base = 68
     msg_chars = []
     while encoded_int > 0:
         encoded_int, remainder = divmod(encoded_int, base)

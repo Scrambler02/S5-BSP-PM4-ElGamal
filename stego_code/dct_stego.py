@@ -6,7 +6,7 @@ from PIL import Image # Helps open, edit and save images
 from scipy.fftpack import dct # Accesses DCT conversion operation
 import struct
 
-import encryption as enc # Accesses the encryption and decryption functions
+import crypt_code.encryption as enc # Accesses the encryption and decryption functions
 
 """
 This code contains the DCT steganography functions in Pixel Mask 3.0:

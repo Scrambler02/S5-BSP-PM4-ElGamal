@@ -5,7 +5,7 @@ import numpy as np # Used to work with data in images
 from PIL import Image # Helps open, edit and save images
 import struct
 
-import encryption as enc # Accesses the encryption and decryption functions
+import crypt_code.encryption as enc # Accesses the encryption and decryption functions
 
 """
 This code contains the LSB steganography and image processing related functions in Pixel Mask 3.0:

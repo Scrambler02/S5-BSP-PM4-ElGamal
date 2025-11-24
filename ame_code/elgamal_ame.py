@@ -4,7 +4,7 @@ from Crypto.Random import get_random_bytes
 from char_int_elgamal import encode_msg_to_int, decode_msg_to_int
 import secrets
 import math
-from itertools import zip_longest
+
 
 # ======== HELPER FUNCTIONS ======== #
 
@@ -20,7 +20,7 @@ def F(sk_a, IV, st, q):
     r_prime = (int.from_bytes(encrypted, 'little') % (q - 1)) + 1
     return r_prime
 
-def get_generator(p):
+def g_generator(p):
     while True:
         h = secrets.randbelow(p-3) + 2
         g = pow(h, 2, p)
@@ -43,7 +43,7 @@ def create_keys(p, q, g):
 
 
 def aEncrypt(p, q, g, m, m_a, pk, sk_a, IV, st):
-    # Compute pseudo-random part
+    # Generate pseudo-random r' to compute r
     r_prime = F(sk_a, IV, st, q)
     r = (r_prime + m_a) % q
 
@@ -101,6 +101,7 @@ def baby_step_giant_step(p, g, h, bound):
 
     return None
 
+
 # Anamorphic decryption
 def aDecrypt(p, g, sk_a, ct, IV, st, q, bound):
     r_prime = F(sk_a, IV, st, q)
@@ -113,6 +114,7 @@ def aDecrypt(p, g, sk_a, ct, IV, st, q, bound):
     m_a = baby_step_giant_step(p, g, g_m_a, bound)
     return m_a
 
+
 # Standard decryption
 def Decrypt(p, ct, sk):
     s = pow(ct[1], sk, p) # s = g^r^x = y^r
@@ -121,11 +123,11 @@ def Decrypt(p, ct, sk):
     return cover_msg
 
 
-# ===== Initialization ===== #
+# ===== Parameter initialization ===== #
 
 p = 25283138329189278652587895589109525736072750946542698825287111445816073512149787631506175333955884685211183346377467560941062660497423325529940869143458703 
 q = 12641569164594639326293947794554762868036375473271349412643555722908036756074893815753087666977942342605591673188733780470531330248711662764970434571729351
-g = get_generator(p)
+g = g_generator(p)
 
 pk, sk, sk_a = create_keys(p, q, g)
 

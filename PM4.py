@@ -1,4 +1,4 @@
-# Pixel Mask 4.0 Application - User Interface
+# Pixel Mask 4.0 - App launch code
 import tkinter as tk
 from tkinter import filedialog
 from threading import Thread
@@ -8,14 +8,13 @@ import darkdetect
 import ui_code.pm_text as pmt
 import base64
 import os
-from cryptography.hazmat.primitives import serialization
 from PIL import Image, ImageTk
 
-
 import crypt_code.encryption as enc
+from ame_code.char_int_elgamal import decode_msg_to_int
 from stego_code import lsb_stego as lsb
 from stego_code import dct_stego as dct
-from ame_code import xor_rsa_ame as ame
+from ame_code import elgamal_ame as ame
 
 
 class PixelMaskApp4(tk.Tk):
@@ -47,8 +46,9 @@ class PixelMaskApp4(tk.Tk):
         # AME keys
         self.pk = None # public key
         self.sk = None # private key
-        self.k1 = None # cover key
-        self.k2 = None # double key
+        self.sk_a = None # double key
+        self.st = 0 # state
+        self.iv = 0 # initialization vector
 
         self.create_widgets()
         self.detect_system_colour()
@@ -355,33 +355,26 @@ class PixelMaskApp4(tk.Tk):
                 self.start_default_mode()
             elif cmd.lower() == 'cancel':
                 self.reset_ame_crypt_flags()
-            
+
             # -- AME CRYPTOGRAPHY COMMANDS -- #
             elif cmd.lower() == 'create keys':
-                # Generate RSA public/private keys and save to desktop 
+                # Generate ElGamal public/private keys
                 self.reset_ame_crypt_flags()
-                self.pk, self.sk = ame.rsa_keys()
-                # Convert keys to PEM format
-                public_bytes = self.pk.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo
-                )
-                private_bytes = self.sk.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.TraditionalOpenSSL,
-                    encryption_algorithm=serialization.NoEncryption()
-                )
+                self.pk, self.sk, self.sk_a = ame.create_keys(ame.p, ame.q, ame.g)
                 # Save keys to Desktop folder
                 desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-                rsa_keys_path = os.path.join(desktop_path, "rsa_keys")
-                os.makedirs(rsa_keys_path, exist_ok=True)
-                pub_path = os.path.join(rsa_keys_path, "public_key.txt")
-                priv_path = os.path.join(rsa_keys_path, "private_key.txt")
-                with open(pub_path, "wb") as f:
-                    f.write(public_bytes)
-                with open(priv_path, "wb") as f:
-                    f.write(private_bytes)
-                self.output_text(f'Public and private keys saved to rsa_keys folder on your desktop')
+                ct_file_path = os.path.join(desktop_path, "ame_keys")
+                os.makedirs(ct_file_path, exist_ok=True)
+                pub_path = os.path.join(ct_file_path, "public_key.txt")
+                priv_path = os.path.join(ct_file_path, "private_key.txt")
+                doubl_path = os.path.join(ct_file_path, "double_key.txt")
+                with open(pub_path, "w") as f:
+                    f.write(str(self.pk))
+                with open(priv_path, "w") as f:
+                    f.write(str(self.sk))
+                with open(doubl_path, "wb") as f:
+                    f.write((self.sk_a))
+                self.output_text(f'Public, private, and double keys saved to ame_keys folder on your desktop')
             elif cmd.lower() == 'load pk':
                 # Load public key from file
                 self.reset_crypt_flags()
@@ -391,10 +384,9 @@ class PixelMaskApp4(tk.Tk):
                 )
                 if key_file:
                     try:
-                        with open(key_file, 'rb') as f:
-                            key_data = f.read()
-                        self.pk = serialization.load_pem_public_key(key_data)
-                        self.output_text(f'Public key successfully loaded')
+                        with open(key_file, 'r') as f:
+                            self.pk = eval(f.read())
+                        self.output_text(f'Public key successfully loaded: \n{self.pk}')
                     except Exception as e:
                         self.output_text(f'ERROR: Could not load public key {str(e)}')
             elif cmd.lower() == 'load sk':
@@ -406,22 +398,39 @@ class PixelMaskApp4(tk.Tk):
                 )
                 if key_file:
                     try:
-                        with open(key_file, 'rb') as f:
-                            key_data = f.read()
-                        self.sk = serialization.load_pem_private_key(
-                            key_data,
-                            password=None
-                        )
-                        self.output_text(f'Private key successfully loaded')
+                        with open(key_file, 'r') as f:
+                            self.sk = int(f.read())
+                        self.output_text(f'Private key successfully loaded: \n{self.sk}')
                     except Exception as e:
                         self.output_text(f'ERROR: Could not load private key {str(e)}')
+            elif cmd.lower() == 'load ska':
+                # Load double key from file
+                self.reset_crypt_flags()
+                key_file = filedialog.askopenfilename(
+                    title='Select Double Key file',
+                    filetypes=[('Text files', '*.txt'), ('PEM files', '*.pem')]
+                )
+                if key_file:
+                    try:
+                        with open(key_file, 'rb') as f:
+                            self.sk_a = f.read()
+                        self.output_text(f'Double key successfully loaded: \n{self.sk_a}')
+                    except Exception as e:
+                        self.output_text(f'ERROR: Could not load double key {str(e)}')
+
             elif cmd.lower() == 'clear keys':
                 # Clear all loaded/generated keys
                 self.pk = None
                 self.sk = None
-                self.k1 = None
-                self.k2 = None
+                self.sk_a = None
+                self.st = None
+                self.iv = None
                 self.output_text('Keys cleared')
+
+
+
+
+
 
             elif cmd.lower() == 'encrypt' and not self.ame_aEncrypt_flag:
                 # Start AME encryption
@@ -432,109 +441,80 @@ class PixelMaskApp4(tk.Tk):
                 self.output_text('Enter decoy message:')
                 self.ame_aEncrypt_flag = 'decoy'
             elif self.ame_aEncrypt_flag == 'decoy':
-                # Save decoy + prompt for secret message
-                self.decoy_msg = cmd
+                self.m = cmd # Decoy message
                 self.output_text('Enter secret message:')
                 self.ame_aEncrypt_flag = 'secret'
             elif self.ame_aEncrypt_flag == 'secret':
-                # Save messages, encrypt, wrap keys + save to desktop
-                secret_msg = cmd
-                ct_b64, self.k1, self.k2 = ame.aEncrypt(self.decoy_msg, secret_msg)
-                wrapped_k1 = ame.wrap_key(self.pk, self.k1)
-                self.k1 = base64.b64encode(wrapped_k1).decode('utf-8')
-                wrapped_k2 = ame.wrap_key(self.pk, self.k2)
-                self.k2 = base64.b64encode(wrapped_k2).decode('utf-8')
-                desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-                ame_keys_path = os.path.join(desktop_path, "ame_keys")
-                os.makedirs(ame_keys_path, exist_ok=True)
-                k1_path = os.path.join(ame_keys_path, "key.txt")
-                k2_path = os.path.join(ame_keys_path, "double_key.txt")
-                with open(k1_path, "w") as f:
-                    f.write(self.k1)
-                with open(k2_path, "w") as f:
-                    f.write(self.k2)
-                self.output_text(f'Ciphertext: {ct_b64.decode()}')
-                self.output_text(f'Cover and double keys saved to ame_keys folder on your desktop')
+                m_a = cmd # Secret message
+                st_start = self.st
+                ct, self.st = ame.encode_msg(self.m, m_a, self.pk, self.sk_a, self.iv, self.st)
+                self.output_text(f'CIPHERTEXT: {ct} \nST: {self.st} \nIV: {self.iv}')
                 self.ame_aEncrypt_flag = False
-
-            elif cmd.lower() == 'load k':
-                # Load k1 from file
-                self.reset_ame_crypt_flags()
-                key_file = filedialog.askopenfilename(
-                    title='Select k file',
-                    filetypes=[('Text files', '*.txt')]
-                )
-                if not key_file:
-                    self.output_text('No file selected')
-                else:
-                    try:
-                        with open(key_file, 'r') as f:
-                            self.k1 = f.read().strip()
-                        self.output_text('k file loaded successfully')
-                    except FileNotFoundError:
-                        self.output_text('ERROR: k file not found')
-            elif cmd.lower() == 'load dk':
-                # Load k2 from file -> double key
-                self.reset_ame_crypt_flags()
-                key_file = filedialog.askopenfilename(
-                    title='Select dk file',
-                    filetypes=[('Text files', '*.txt')]
-                )
-                if not key_file:
-                    self.output_text('No file selected')
-                else:
-                    try:
-                        with open(key_file, 'r') as f:
-                            self.k2 = f.read().strip()
-                        self.output_text('dk file loaded successfully')
-                    except FileNotFoundError:
-                        self.output_text('ERROR: dks file not found')
+                desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+                ct_file_path = os.path.join(desktop_path, "ciphertext")
+                os.makedirs(ct_file_path, exist_ok=True)
+                ct_path = os.path.join(ct_file_path, "ct.txt")
+                with open(ct_path, "w") as f:
+                    f.write("CIPHERTEXT:\n")
+                    f.write(str(ct) + "\n\n")
+                    f.write("IV:\n")
+                    f.write(str(self.iv) + "\n\n")
+                    f.write("ST:\n")
+                    f.write(str(st_start) + "\n")
 
             elif cmd.lower() == 'decrypt':
-                # Start decryption -> retrieve cover message
                 self.reset_ame_crypt_flags()
-                self.output_text('Enter ciphertext:')
-                self.ame_cover_decrypt_flag = 'ct'
-            elif self.ame_cover_decrypt_flag == 'ct':
-                ct_b64 = cmd
-                # Check if keys are loaded (k1 + private key)
-                if not self.k1:
-                    self.output_text("ERROR: k not loaded")
-                    self.ame_cover_decrypt_flag = False
+                ct_file = filedialog.askopenfilename(
+                    title="Select ciphertext file",
+                    filetypes=[("Text files", "*.txt")]
+                )
+                if not ct_file:
+                    self.output_text("No file selected")
                     return
-                if self.sk is None:
-                    self.output_text("ERROR: Private key not loaded")
-                    self.ame_cover_decrypt_flag = False
-                    return
-                # Perform decryption
-                wrapped_k1_bytes = base64.b64decode(self.k1)
-                unwrapped_k1 = ame.unwrap_key(self.sk, wrapped_k1_bytes)
-                cover_msg = ame.aDecrypt(ct_b64, unwrapped_k1)
-                self.output_text(f'Cover message: {cover_msg}')
-                self.ame_cover_decrypt_flag = False
+                try:
+                    with open(ct_file, "r") as f:
+                        data = [line.strip() for line in f.readlines()]
+                    # ➤ Extract items from ciphertext file
+                    i_ct = data.index("CIPHERTEXT:") + 1
+                    i_iv = data.index("IV:") + 1
+                    i_st = data.index("ST:") + 1
+                    cts = eval(data[i_ct]) # list of (c1, c2)
+                    iv  = int(data[i_iv])
+                    st  = int(data[i_st])
+                    # ➤ Use your own decode function correctly
+                    secret_msg = ame.decode_msg(cts, st, sk=self.sk, sk_a=None, IV=iv)
+                    self.output_text(f"Decoy message: {secret_msg}")
+                except Exception as e:
+                    self.output_text(f"ERROR: Decryption failure - {e}")
 
             elif cmd.lower() == 'ame decrypt':
-                # Start AME decryption -> retrieve secret message
                 self.reset_ame_crypt_flags()
-                self.output_text('Enter ciphertext:')
-                self.ame_aDecrypt_flag = 'ct'
-            elif self.ame_aDecrypt_flag == 'ct':
-                ct_b64 = cmd
-                # Check if keys are loaded (k2 + private key)
-                if not self.k2:
-                    self.output_text("ERROR: dk not loaded")
-                    self.ame_aDecrypt_flag = False
+                ct_file = filedialog.askopenfilename(
+                    title="Select ciphertext file",
+                    filetypes=[("Text files", "*.txt")]
+                )
+                if not ct_file:
+                    self.output_text("No file selected")
                     return
-                if self.sk is None:
-                    self.output_text("ERROR: Private key not loaded")
-                    self.ame_aDecrypt_flag = False
-                    return
-                # Perform anamorphic decryption
-                wrapped_k2_bytes = base64.b64decode(self.k2)
-                unwrapped_k2 = ame.unwrap_key(self.sk, wrapped_k2_bytes)
-                secret_msg = ame.aDecrypt(ct_b64, unwrapped_k2)
-                self.output_text(f'Secret message: {secret_msg}')
-                self.ame_aDecrypt_flag = False
+
+                try:
+                    with open(ct_file, "r") as f:
+                        data = [line.strip() for line in f.readlines()]
+                    # ➤ Extract items from ciphertext file
+                    i_ct = data.index("CIPHERTEXT:") + 1
+                    i_iv = data.index("IV:") + 1
+                    i_st = data.index("ST:") + 1
+
+                    raw = eval(data[i_ct])
+                    cts = [(int(c1), int(c2)) for (c1, c2) in raw]
+                    iv  = int(data[i_iv])
+                    st  = int(data[i_st])
+                    # ➤ Use your own decode function correctly
+                    secret_msg = ame.decode_msg(cts, st, sk=None, sk_a=self.sk_a, IV=iv)
+                    self.output_text(f"Secret message: {secret_msg}")
+
+                except Exception as e:
+                    self.output_text(f"ERROR: Anamorphic decryption failure - {e}")
         
         # -- DEFAULT CRYPTOGRAPHY + STEGANOGRAPHY COMMANDS -- #
         elif cmd.lower() == '2jpg':

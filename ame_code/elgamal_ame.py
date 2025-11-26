@@ -1,7 +1,8 @@
 # Anamorphic Encryption - ElGamal Scheme
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
-from char_int_elgamal import encode_msg_to_int, decode_msg_to_int
+from .char_int_elgamal import encode_msg_to_int, decode_msg_to_int
+from itertools import zip_longest
 import secrets
 import math
 
@@ -63,40 +64,43 @@ def baby_step_giant_step(p, g, h, bound):
     if h == 1:
         return 0  # g^0 == 1
     
-    # limit bound to at least 1
+    # Limit bound to at least 1
     if bound <= 1:
         return None
 
-    # n = ceil(sqrt(q))
+    # Block size n ≈ sqrt(bound) for BSGS
     n = math.isqrt(bound)
     if n * n < bound:
         n += 1
 
-    # Baby steps: store g^j -> j for j in [0, n-1]
+    # Baby-steps: store g^j -> for all j in [0, n-1]
     baby = {}
-    cur = 1
+    current = 1
     for j in range(n):
         # If collision, keep the smallest j
-        if cur not in baby:
-            baby[cur] = j
-        cur = (cur * g) % p
+        if current not in baby:
+            baby[current] = j
+        current = (current * g) % p
 
-    # Compute g^n and its modular inverse modulo p
+    # Compute g^n
     g_n = pow(g, n, p)
-    # modular inverse of g_n modulo p
+    # Modular inverse of g_n modulo p
     g_n_inv = pow(g_n, p - 2, p)
 
-    # giant steps: i from 0..ceil(bound/n)-1
+    # Giant-steps: look for i, j s.t. x = i * n + j solves g^x = h
     gamma = h
-    max_i = (bound + n - 1) // n  # ceiling(bound / n)
+    max_i = (bound + n - 1) // n  # Compute how many giant steps we need
+
     for i in range(max_i):
+        # Check if current gamma matches any baby table value 
         if gamma in baby:
-            j = baby[gamma]
-            x = i * n + j
-            if x < bound:
+            j = baby[gamma]     # Retrieve corresponding baby-step exponent j
+            x = i * n + j       # Reconstruct the full exponent x = i*n + j
+            if x < bound:       # Only accept x if it is within the allowed bound
                 return x
             else:
                 return None
+        # Move to next giant step -> multiply gamma by g^-n
         gamma = (gamma * g_n_inv) % p
 
     return None
@@ -125,13 +129,49 @@ def Decrypt(p, ct, sk):
 
 # ===== Parameter initialization ===== #
 
-p = 25283138329189278652587895589109525736072750946542698825287111445816073512149787631506175333955884685211183346377467560941062660497423325529940869143458703 
-q = 12641569164594639326293947794554762868036375473271349412643555722908036756074893815753087666977942342605591673188733780470531330248711662764970434571729351
+st = 0
+IV = 0
+
+p = 179769313486231590770839156793787453197860296048756011706444423684197180216158519368947833795864925541502180565485980503646440548199239100050792877003355816639229553136239076508735759914822574862575007425302077447712589550957937778424442426617334727629299387668709205606050270810842907692932019128194467627007 
+q = 89884656743115795385419578396893726598930148024378005853222211842098590108079259684473916897932462770751090282742990251823220274099619550025396438501677908319614776568119538254367879957411287431287503712651038723856294775478968889212221213308667363814649693834354602803025135405421453846466009564097233813503
 g = g_generator(p)
 
 pk, sk, sk_a = create_keys(p, q, g)
 
-st = 0
-IV = 0
-
 bound = 2**36
+
+# ===== Message encryption test ===== #
+
+def encode_msg(m: str, m_a: str, pk, sk_a, IV, st):
+    int_array = [encode_msg_to_int(word) for word in m.split()]
+    a_int_array = [encode_msg_to_int(word_a) for word_a in m_a.split()]
+
+    pairs = zip_longest(int_array, a_int_array, fillvalue=0)
+
+    cts = []
+    st_local = st
+    for m_int, m_a_int in pairs:
+        ct, st_local = aEncrypt(p, q, g, m_int, m_a_int, pk, sk_a, IV, st_local)
+        cts.append(ct)
+
+    return cts, st_local
+
+def decode_msg(cts, st_start, sk=None, sk_a=None, IV=None):
+    decoded_cover = ""
+    decoded_anam = ""
+    st_local = st_start
+
+    if sk != None:
+        for ct in cts:
+            m = Decrypt(p, ct, sk)
+            decoded_cover += decode_msg_to_int(m) + " "
+            st_local += 1
+        return decoded_cover.strip()
+    elif sk_a != None:
+        for ct in cts:
+            m_a = aDecrypt(p, g, sk_a, ct, IV, st_local, q, bound)
+            decoded_anam += (decode_msg_to_int(m_a) if m_a is not None else "[?]") + " "
+            st_local += 1
+        return decoded_anam.strip()
+    else:
+        raise ValueError("ERROR: No key loaded")

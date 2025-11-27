@@ -447,7 +447,7 @@ class PixelMaskApp4(tk.Tk):
             elif self.ame_aEncrypt_flag == 'secret':
                 m_a = cmd # Secret message
                 st_start = self.st
-                ct, self.st = ame.encode_msg(self.m, m_a, self.pk, self.sk_a, self.iv, self.st)
+                ct, self.st = ame.encode(self.m, m_a, self.pk, self.sk_a, self.iv, self.st)
                 self.output_text(f'CIPHERTEXT: {ct} \nST: {self.st} \nIV: {self.iv}')
                 self.ame_aEncrypt_flag = False
                 desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
@@ -482,7 +482,7 @@ class PixelMaskApp4(tk.Tk):
                     iv  = int(data[i_iv])
                     st  = int(data[i_st])
                     # ➤ Use your own decode function correctly
-                    secret_msg = ame.decode_msg(cts, st, sk=self.sk, sk_a=None, IV=iv)
+                    secret_msg = ame.decode(cts, st, sk=self.sk, sk_a=None, IV=iv)
                     self.output_text(f"Decoy message: {secret_msg}")
                 except Exception as e:
                     self.output_text(f"ERROR: Decryption failure - {e}")
@@ -510,7 +510,7 @@ class PixelMaskApp4(tk.Tk):
                     iv  = int(data[i_iv])
                     st  = int(data[i_st])
                     # ➤ Use your own decode function correctly
-                    secret_msg = ame.decode_msg(cts, st, sk=None, sk_a=self.sk_a, IV=iv)
+                    secret_msg = ame.decode(cts, st, sk=None, sk_a=self.sk_a, IV=iv)
                     self.output_text(f"Secret message: {secret_msg}")
 
                 except Exception as e:

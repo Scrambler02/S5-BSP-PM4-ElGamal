@@ -142,7 +142,7 @@ bound = 2**36
 
 # ===== Message encryption test ===== #
 
-def encode_msg(m: str, m_a: str, pk, sk_a, IV, st):
+def encode(m: str, m_a: str, pk, sk_a, IV, st):
     int_array = [encode_msg_to_int(word) for word in m.split()]
     a_int_array = [encode_msg_to_int(word_a) for word_a in m_a.split()]
 
@@ -156,7 +156,7 @@ def encode_msg(m: str, m_a: str, pk, sk_a, IV, st):
 
     return cts, st_local
 
-def decode_msg(cts, st_start, sk=None, sk_a=None, IV=None):
+def decode(cts, st_start, sk=None, sk_a=None, IV=None):
     decoded_cover = ""
     decoded_anam = ""
     st_local = st_start

@@ -1,26 +1,25 @@
 # Pixel Mask 4.0 - App launch code
 import tkinter as tk
 from tkinter import filedialog
-from threading import Thread
-import subprocess
-import queue
 import darkdetect
 import ui_code.pm_text as pmt
 import base64
 import os
+import random
 from PIL import Image, ImageTk
 
 import crypt_code.encryption as enc
-from ame_code.char_int_elgamal import decode_msg_to_int
 from stego_code import lsb_stego as lsb
 from stego_code import dct_stego as dct
 from ame_code import elgamal_ame as ame
+from password_manager import set_password
+from login import run_login_screen
 
 
 class PixelMaskApp4(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('Pixel Mask 3.0')
+        self.title('Pixel Mask 4.0')
         self.geometry('1200x700')
         self.command_history= []
         self.command_history_index = -1
@@ -36,7 +35,6 @@ class PixelMaskApp4(tk.Tk):
         self.dct_mask_flag = False
         self.dct_unmask_flag = False
         self.convert_to_jpg_flag = False
-        
         # AME operations flags
         self.ame_mode_flag = False
         self.ame_keys_prompt = False
@@ -45,90 +43,115 @@ class PixelMaskApp4(tk.Tk):
         self.ame_cover_decrypt_flag = False
         # AME keys
         self.pk = None # public key
-        self.sk = None # private key
+        self.sk = None # secret key
         self.sk_a = None # double key
         self.st = 0 # state
         self.iv = 0 # initialization vector
-
         self.create_widgets()
         self.detect_system_colour()
+        # Avatar animations
+        self.current_frame = 0
+        self.load_avatar_frames()
+        self.start_avatar_animation()
+        # Current password
+        set_password("pm4")
 
-        # Attach avatar (from another file)
-        # self.avatar = AvatarDisplay(self)
-        # self.avatar.place(x=20, y=50)
 
-
-# ======== GUI SETUP + KEYBOARD SHORTCUTS ======== #
-
-
-        # Run computer commands in a subprocess shell
-        self.cmd_queue = queue.Queue()
-        self.shell = subprocess.Popen(
-            ['bash'],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
-        )
-        # Read subprocess input without blocking the CLI
-        Thread(target=self.read_output, daemon=True).start()
+# ------- GUI SETUP + KEYBOARD SHORTCUTS ------- #
 
     def detect_system_colour(self):
         is_dark_mode = darkdetect.isDark()
         if is_dark_mode:
             self.set_dark_mode()
+            self.gui_mode = 2 # Used for animations
         else:
             self.set_light_mode()
+            self.gui_mode = 1
 
-    # Create main window with two columns
+    # Create main window with two panels
     def create_widgets(self):
-        self.columnconfigure(0, weight=1)  # Smaller left panel
-        self.columnconfigure(1, weight=3)  # Larger right panel
-        self.rowconfigure(0, weight=1)     # Make the row expandable
+        self.columnconfigure(0, weight=1) # Smaller left panel
+        self.columnconfigure(1, weight=3) # Larger right panel
+        self.rowconfigure(0, weight=1)    # Make the row expandable
 
-        # Left Frame -> placeholder for virtual assistant
+        # Left Panel - Virtual assistant
         self.left_panel = tk.Frame(self)
         self.left_panel.grid(row=0, column=0, sticky='nsew')
         self.canvas = tk.Canvas(self.left_panel, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
+        # AI chatbot input box
+        self.left_input = tk.Entry(self.left_panel)
+        self.left_input.pack(fill=tk.X)
+        self.animation_frames = []
+        # Avatar label
+        self.avatar_label = tk.Label(self.left_panel, bg="#2E2E2E")
+        self.avatar_label.place(x=-14, y=70)
+        # Avatar name label
+        self.avatar_name = tk.Label(self.left_panel, text="Echo", font=("SF Mono", 20))
+        self.avatar_name.place(x=162, y=510)
 
-        try:
-            avatar_path = "assets/big_echo.png"
-            img = Image.open(avatar_path)
-            self.avatar_img = ImageTk.PhotoImage(img)
-
-            # Create label to show avatar
-            self.avatar_label = tk.Label(self.left_panel, image=self.avatar_img, bg="#2E2E2E")
-            self.avatar_label.place(x=-14, y=70)
-
-            # Optional: display user name below avatar
-            self.avatar_name = tk.Label(self.left_panel, text="Echo", fg="white", bg="#2E2E2E", font=("SF Mono", 20))
-            self.avatar_name.place(x=162, y=510)
-        except Exception as e:
-            print(f"Could not load avatar image: {e}")
-
-
-        # Right Frame -> Command line interface
+        # Right Panel - Main CLI
         self.right_panel = tk.Frame(self)
         self.right_panel.grid(row=0, column=1, sticky='nsew')
-
-        # Text output box -> inside right panel
+        # Text output box
         self.output = tk.Text(self.right_panel, wrap=tk.WORD)
         self.output.pack(fill=tk.BOTH, expand=True)
         self.output.config(state=tk.DISABLED)
         self.output_text('Default mode active')
-
-        # Text input box -> inside right panel
-        self.input = tk.Entry(self.right_panel)
-        self.input.pack(fill=tk.X)
-        self.input.bind('<Return>', self.process_command)
-        self.input.bind('<Up>', self.cycle_previous_command)
-        self.input.bind('<Down>', self.cycle_next_command)
+        # Text input box
+        self.right_input = tk.Entry(self.right_panel)
+        self.right_input.pack(fill=tk.X)
+        self.right_input.bind('<Return>', self.process_command)
+        self.right_input.bind('<Up>', self.cycle_previous_command)
+        self.right_input.bind('<Down>', self.cycle_next_command)
 
         # Keyboard shortcuts to clear terminal
         self.bind_all('<Command-k>', self.handle_clear_shortcut)
         self.bind_all('<Command-l>', self.handle_clear_shortcut)
+
+
+# ------- AVATAR CONFIGURATION ------- #
+
+    def load_avatar_frames(self):
+        # Determine avatar sprites based on current GUI mode
+        mode = None
+        match self.gui_mode:
+            case 1: mode = "assets/light_mode_sprites"
+            case 2: mode = "assets/dark_mode_sprites"
+            case 3: mode = "assets/blue_mode_sprites"
+            case 4: mode = "assets/red_mode_sprites"
+            case 5: mode = "assets/ame_sprites"
+            case _: mode = None
+        
+        # Clear previously loaded animation frames
+        self.animation_frames.clear()
+
+        try:
+            # Iterate through all files in sprite folder
+            for file in sorted(os.listdir(mode)):
+                if file.lower().endswith(".png"): # Only process PNG
+                    img = Image.open(os.path.join(mode, file))
+                    # Convert to Tkinter-compatible image and store it
+                    self.animation_frames.append(ImageTk.PhotoImage(img))
+
+        except Exception as e:
+            print(f"Failed loading animation frames: {e}")
+
+
+    def start_avatar_animation(self):
+         # Update avatar frame if frames are loaded
+        if hasattr(self, "avatar_label") and self.animation_frames:
+            self.current_frame = (self.current_frame + 1) % len(self.animation_frames)
+            frame = self.animation_frames[self.current_frame]
+            self.avatar_label.config(image=frame)
+            self.avatar_label.image = frame # Avoid garbage collection
+
+        # Random delay between frames
+        delay = random.randint(100, 1200)
+        self.after(delay, self.start_avatar_animation)
+
+
+# ------- TERMINAL INPUT & COMMAND HISTORY ------- #
 
     # Navigate backwards through command history
     def cycle_previous_command(self, event):
@@ -140,8 +163,8 @@ class PixelMaskApp4(tk.Tk):
 
             if 0 <= self.command_history_index < len(self.command_history):
                 previous_command = self.command_history[self.command_history_index]
-                self.input.delete(0, tk.END)
-                self.input.insert(0, previous_command)
+                self.right_input.delete(0, tk.END)
+                self.right_input.insert(0, previous_command)
         return 'break'
 
     # Navigate forward through command history
@@ -150,11 +173,11 @@ class PixelMaskApp4(tk.Tk):
             if self.command_history_index < len(self.command_history) - 1:
                 self.command_history_index += 1
                 next_command = self.command_history[self.command_history_index]
-                self.input.delete(0, tk.END)
-                self.input.insert(0, next_command)
+                self.right_input.delete(0, tk.END)
+                self.right_input.insert(0, next_command)
             else:
                 self.command_history_index = -1
-                self.input.delete(0, tk.END)
+                self.right_input.delete(0, tk.END)
         return 'break'
     
     # Clear all text in output box
@@ -168,61 +191,93 @@ class PixelMaskApp4(tk.Tk):
         self.clear_terminal()
 
 
-# ======== THEME SETUP ======== #
-
+# ------- MODE SETUP ------- #
 
     def set_light_mode(self):
+        # Set mode and reset animation
+        self.gui_mode = 1
+        self.current_frame = 0
+        self.load_avatar_frames()
+        # Update background colors
         self.config(bg="#EBE7E7")
         self.output.config(bg='#EBE7E7', fg='#000000', highlightthickness=3, borderwidth=1)
-        self.input.config(bg='#EBE7E7', fg='#000000', highlightthickness=3, borderwidth=1)
+        self.right_input.config(bg='#EBE7E7', fg='#000000', highlightthickness=3, borderwidth=1)
+        self.left_input.config(bg='#EBE7E7', fg='#000000', highlightthickness=3, borderwidth=1)
         self.left_panel.config(bg='#FFFFFF')
         self.canvas.config(bg='#FFFFFF')
+        self.avatar_label.config(bg="#FFFFFF")
+        # Update avatar name color and background
+        self.avatar_name.config(fg="#000000", bg="#FFFFFF")
+
 
     def set_dark_mode(self):
+        # Set mode and reset animation
+        self.gui_mode = 2
+        self.current_frame = 0
+        self.load_avatar_frames()
+        # Update background colors
         self.config(bg='#1E1E1E')
         self.output.config(bg='#1E1E1E', fg='#FFFFFF', highlightthickness=3, borderwidth=1)
-        self.input.config(bg='#1E1E1E', fg='#FFFFFF', highlightthickness=3, borderwidth=1) 
+        self.right_input.config(bg='#1E1E1E', fg='#FFFFFF', highlightthickness=3, borderwidth=1) 
+        self.left_input.config(bg='#1E1E1E', fg='#FFFFFF', highlightthickness=3, borderwidth=1) 
         self.left_panel.config(bg="#2E2E2E")
         self.canvas.config(bg='#2E2E2E')
+        self.avatar_label.config(bg="#2E2E2E")
+        # Update avatar name color and background
+        self.avatar_name.config(fg="#FFFFFF", bg="#2E2E2E")
 
     def set_blue_mode(self):
+        # Set mode and reset animation
+        self.gui_mode = 3
+        self.current_frame = 0
+        self.load_avatar_frames()
+        # Update background colors
         self.config(bg='#4169E1')
         self.output.config(bg='#4169E1', fg='#FFFFFF', highlightthickness=3, borderwidth=1)
-        self.input.config(bg='#4169E1', fg='#FFFFFF', highlightthickness=3, borderwidth=1)
+        self.right_input.config(bg='#4169E1', fg='#FFFFFF', highlightthickness=3, borderwidth=1)
+        self.left_input.config(bg='#4169E1', fg='#FFFFFF', highlightthickness=3, borderwidth=1)
         self.left_panel.config(bg="#537DFB")
         self.canvas.config(bg='#537DFB')
+        self.avatar_label.config(bg="#537DFB")
+        # Update avatar name color and background
+        self.avatar_name.config(fg="#FFFFFF", bg="#537DFB")
 
     def set_red_mode(self):
+        # Set mode and reset animation
+        self.gui_mode = 4
+        self.current_frame = 0
+        self.load_avatar_frames()
+        # Update background colors
         self.config(bg='#DC143C')
         self.output.config(bg='#DC143C', fg='#FFFFFF', highlightthickness=3, borderwidth=1)
-        self.input.config(bg='#DC143C', fg='#FFFFFF', highlightthickness=3, borderwidth=1) 
+        self.right_input.config(bg='#DC143C', fg='#FFFFFF', highlightthickness=3, borderwidth=1) 
+        self.left_input.config(bg='#DC143C', fg='#FFFFFF', highlightthickness=3, borderwidth=1) 
         self.left_panel.config(bg="#FF1745")
         self.canvas.config(bg="#FF1745")
+        self.avatar_label.config(bg="#FF1745")
+        # Update avatar name color and background
+        self.avatar_name.config(fg="#FFFFFF", bg="#FF1745")
 
     def set_hacker_mode(self):
+        # Set mode and reset animation
+        self.gui_mode = 5
+        self.ame_mode_flag = True
+        self.current_frame = 0
+        self.load_avatar_frames()
+        # Update background colors
         self.config(bg='#000000')
         self.output.config(bg='#000000', fg='#66FF66', highlightthickness=3, borderwidth=1)
-        self.input.config(bg='#000000', fg='#66FF66', highlightthickness=3, borderwidth=1) 
+        self.right_input.config(bg='#000000', fg='#66FF66', highlightthickness=3, borderwidth=1)
+        self.left_input.config(bg='#000000', fg='#66FF66', highlightthickness=3, borderwidth=1)
         self.left_panel.config(bg="#1E1E1E")
         self.canvas.config(bg="#1E1E1E")
-
-        try:
-            # Load new image
-            img = Image.open('assets/big_ame_echo.png')
-            self.avatar_img = ImageTk.PhotoImage(img)
-            self.avatar_label.config(image=self.avatar_img)
-
-            # Update avatar name color if needed
-            self.avatar_name.config(fg="#66FF66", bg="#1E1E1E")
-            self.avatar_name.place(x=161, y=530)
-            self.avatar_label.config(image=self.avatar_img, bg="#1E1E1E")
-
-        except Exception as e:
-            print(f'Failed to change avatar for hacker mode: {e}')
+        self.avatar_name.config(fg="#66FF66", bg="#1E1E1E")
+        self.avatar_label.config(bg="#1E1E1E")
+        # Update avatar name color and background
+        self.avatar_name.config(fg="#66FF66", bg="#1E1E1E")
 
 
-# ======== FLAG RESETTING FUNCTIONS ======== #
-
+# ------- FLAG RESETTING FUNCTIONS ------- #
 
     # reset cryptography-related flags
     def reset_crypt_flags(self):
@@ -243,32 +298,8 @@ class PixelMaskApp4(tk.Tk):
         self.ame_decrypt_flag = False
         self.ame_aDecrypt_flag = False
 
-    # reset AME mode flags
-    def reset_ame_flags(self):
-        self.ame_mode_flag = False
-        self.ame_keys_prompt = False
-        self.ame_aEncrypt_flag = False
-        self.ame_decrypt_flag = False
-        self.ame_aDecrypt_flag = False
 
-
-# ======== TERMINAL OUTPUT FUNCTIONS ======== #
-
-
-    # Read output from the subprocess
-    def read_output(self):
-        for line in self.shell.stdout:
-            self.cmd_queue.put(line)
-            self.update_output()
-
-    # Print new shell output in the output box
-    def update_output(self):
-        while not self.cmd_queue.empty():
-            line = self.cmd_queue.get()
-            self.output.config(state=tk.NORMAL)
-            self.output.insert(tk.END, line)
-            self.output.config(state=tk.DISABLED)
-            self.output.see(tk.END)
+# ------- TERMINAL OUTPUT FUNCTIONS ------- #
 
     # Helper function to format PM output
     def output_text(self, msg: str):
@@ -279,21 +310,21 @@ class PixelMaskApp4(tk.Tk):
 
     # Reset CLI to default mode
     def start_default_mode(self):
-        self.reset_ame_flags()
-        self.create_widgets()
+        self.gui_mode = 2
+        self.load_avatar_frames()
+        self.ame_mode_flag = False
         self.detect_system_colour()
         self.handle_clear_shortcut()
         self.output_text('Default mode active')
-        self.input.focus_set()
+        self.right_input.focus_set()
 
 
-# ======== COMMAND PROCESSING ======== #
-
+# ------- COMMAND PROCESSING ------- #
 
     # Handle commands entered by user
     def process_command(self, event):
-        cmd = self.input.get().strip() # Get the text
-        self.input.delete(0, tk.END) # Clear input box
+        cmd = self.right_input.get().strip() # Get the text
+        self.right_input.delete(0, tk.END) # Clear input box
         if cmd:
             self.command_history.append(cmd) # Save to command history
             self.command_history_index = len(self.command_history)
@@ -344,29 +375,29 @@ class PixelMaskApp4(tk.Tk):
         elif cmd.lower() == 'ame mode':
             self.set_hacker_mode()
             self.clear_terminal()
-            self.reset_ame_flags()
+            self.reset_ame_crypt_flags()
             self.ame_mode_flag = True
             self.output_text('Anamorphic encryption mode active')
         elif self.ame_mode_flag:
             if cmd.lower() == 'commands':
                 self.open_ame_cmds_window()
             elif cmd.lower() == 'exit':
-                self.reset_ame_flags()
+                self.ame_mode_flag = False
                 self.start_default_mode()
             elif cmd.lower() == 'cancel':
                 self.reset_ame_crypt_flags()
 
             # -- AME CRYPTOGRAPHY COMMANDS -- #
             elif cmd.lower() == 'create keys':
-                # Generate ElGamal public/private keys
+                # Generate ElGamal public/secret keys
                 self.reset_ame_crypt_flags()
                 self.pk, self.sk, self.sk_a = ame.create_keys(ame.p, ame.q, ame.g)
-                # Save keys to Desktop folder
+                # Save keys to .txt file in Desktop folder
                 desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
                 ct_file_path = os.path.join(desktop_path, "ame_keys")
                 os.makedirs(ct_file_path, exist_ok=True)
                 pub_path = os.path.join(ct_file_path, "public_key.txt")
-                priv_path = os.path.join(ct_file_path, "private_key.txt")
+                priv_path = os.path.join(ct_file_path, "secret_key.txt")
                 doubl_path = os.path.join(ct_file_path, "double_key.txt")
                 with open(pub_path, "w") as f:
                     f.write(str(self.pk))
@@ -374,7 +405,7 @@ class PixelMaskApp4(tk.Tk):
                     f.write(str(self.sk))
                 with open(doubl_path, "wb") as f:
                     f.write((self.sk_a))
-                self.output_text(f'Public, private, and double keys saved to ame_keys folder on your desktop')
+                self.output_text(f'Public, secret, and double keys saved to ame_keys folder on your desktop')
             elif cmd.lower() == 'load pk':
                 # Load public key from file
                 self.reset_crypt_flags()
@@ -390,19 +421,19 @@ class PixelMaskApp4(tk.Tk):
                     except Exception as e:
                         self.output_text(f'ERROR: Could not load public key {str(e)}')
             elif cmd.lower() == 'load sk':
-                # Load private key from file
+                # Load secret key from file
                 self.reset_crypt_flags()
                 key_file = filedialog.askopenfilename(
-                    title='Select Private Key file',
+                    title='Select Secret Key file',
                     filetypes=[('Text files', '*.txt'), ('PEM files', '*.pem')]
                 )
                 if key_file:
                     try:
                         with open(key_file, 'r') as f:
                             self.sk = int(f.read())
-                        self.output_text(f'Private key successfully loaded: \n{self.sk}')
+                        self.output_text(f'Secret key successfully loaded: \n{self.sk}')
                     except Exception as e:
-                        self.output_text(f'ERROR: Could not load private key {str(e)}')
+                        self.output_text(f'ERROR: Could not load secret key {str(e)}')
             elif cmd.lower() == 'load ska':
                 # Load double key from file
                 self.reset_crypt_flags()
@@ -419,18 +450,13 @@ class PixelMaskApp4(tk.Tk):
                         self.output_text(f'ERROR: Could not load double key {str(e)}')
 
             elif cmd.lower() == 'clear keys':
-                # Clear all loaded/generated keys
+                # Clear all keys and states
                 self.pk = None
                 self.sk = None
                 self.sk_a = None
                 self.st = None
                 self.iv = None
                 self.output_text('Keys cleared')
-
-
-
-
-
 
             elif cmd.lower() == 'encrypt' and not self.ame_aEncrypt_flag:
                 # Start AME encryption
@@ -450,6 +476,7 @@ class PixelMaskApp4(tk.Tk):
                 ct, self.st = ame.encode(self.m, m_a, self.pk, self.sk_a, self.iv, self.st)
                 self.output_text(f'CIPHERTEXT: {ct} \nST: {self.st} \nIV: {self.iv}')
                 self.ame_aEncrypt_flag = False
+                # Save ciphertext + state values to .txt file in Desktop folder
                 desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
                 ct_file_path = os.path.join(desktop_path, "ciphertext")
                 os.makedirs(ct_file_path, exist_ok=True)
@@ -463,6 +490,7 @@ class PixelMaskApp4(tk.Tk):
                     f.write(str(st_start) + "\n")
 
             elif cmd.lower() == 'decrypt':
+                # Start AME decryption
                 self.reset_ame_crypt_flags()
                 ct_file = filedialog.askopenfilename(
                     title="Select ciphertext file",
@@ -474,20 +502,20 @@ class PixelMaskApp4(tk.Tk):
                 try:
                     with open(ct_file, "r") as f:
                         data = [line.strip() for line in f.readlines()]
-                    # ➤ Extract items from ciphertext file
+                    # Extract items from ciphertext file
                     i_ct = data.index("CIPHERTEXT:") + 1
                     i_iv = data.index("IV:") + 1
                     i_st = data.index("ST:") + 1
                     cts = eval(data[i_ct]) # list of (c1, c2)
                     iv  = int(data[i_iv])
                     st  = int(data[i_st])
-                    # ➤ Use your own decode function correctly
                     secret_msg = ame.decode(cts, st, sk=self.sk, sk_a=None, IV=iv)
                     self.output_text(f"Decoy message: {secret_msg}")
                 except Exception as e:
                     self.output_text(f"ERROR: Decryption failure - {e}")
 
             elif cmd.lower() == 'ame decrypt':
+                # Start AME anamorphic decryption
                 self.reset_ame_crypt_flags()
                 ct_file = filedialog.askopenfilename(
                     title="Select ciphertext file",
@@ -496,11 +524,10 @@ class PixelMaskApp4(tk.Tk):
                 if not ct_file:
                     self.output_text("No file selected")
                     return
-
                 try:
                     with open(ct_file, "r") as f:
                         data = [line.strip() for line in f.readlines()]
-                    # ➤ Extract items from ciphertext file
+                    # Extract items from ciphertext file
                     i_ct = data.index("CIPHERTEXT:") + 1
                     i_iv = data.index("IV:") + 1
                     i_st = data.index("ST:") + 1
@@ -509,10 +536,8 @@ class PixelMaskApp4(tk.Tk):
                     cts = [(int(c1), int(c2)) for (c1, c2) in raw]
                     iv  = int(data[i_iv])
                     st  = int(data[i_st])
-                    # ➤ Use your own decode function correctly
                     secret_msg = ame.decode(cts, st, sk=None, sk_a=self.sk_a, IV=iv)
                     self.output_text(f"Secret message: {secret_msg}")
-
                 except Exception as e:
                     self.output_text(f"ERROR: Anamorphic decryption failure - {e}")
         
@@ -563,7 +588,7 @@ class PixelMaskApp4(tk.Tk):
                 self.output_text(f'ERROR: Key file not found')
 
         elif cmd.lower() == 'encrypt':
-            # Start default encryption -> using loaded key
+            # Start default encryption - using loaded key
             self.output_text('Enter the message to encrypt:')
             self.reset_crypt_flags()
             self.encrypt_flag = True 
@@ -578,7 +603,7 @@ class PixelMaskApp4(tk.Tk):
                 self.encrypt_flag = False
 
         elif cmd.lower() == 'decrypt':
-            # Start decryption -> using loaded key
+            # Start decryption - using loaded key
             self.output_text('Enter the encrypted message to decrypt:')
             self.reset_crypt_flags()
             self.decrypt_flag = True
@@ -663,12 +688,11 @@ class PixelMaskApp4(tk.Tk):
                 self.output_text('No file selected - Operation canceled')
             self.reset_crypt_flags()
 
-        # Otherwise pass command to subprocess shell
-        self.shell.stdin.write(cmd + '\n')
-        self.shell.stdin.flush()
+        else: # If none of the commands matched
+            self.output_text(f'ERROR: Command not recognized')
 
     def open_cmds_window(self):
-        # Open small separate window -> showing available commands
+        # Open small separate window - showing available commands
         new_win = tk.Toplevel(self)
         new_win.title('Command help')
         new_win.geometry('400x320')
@@ -679,7 +703,7 @@ class PixelMaskApp4(tk.Tk):
         text_widget.pack(fill=tk.BOTH, expand=True)
 
     def open_ame_cmds_window(self):
-        # Open small separate window -> showing available AME mode commands
+        # Open small separate window > showing available AME mode commands
         new_win = tk.Toplevel(self)
         new_win.title('Ame command help')
         new_win.geometry('400x320')
@@ -695,6 +719,9 @@ class PixelMaskApp4(tk.Tk):
             borderwidth=1)
         text_widget.pack(fill=tk.BOTH, expand=True)
 
-if __name__ == '__main__':
-    app = PixelMaskApp4()
-    app.mainloop()
+if __name__ == "__main__":
+    if run_login_screen():
+        app = PixelMaskApp4()
+        app.mainloop()
+    else:
+        print("Access denied.")

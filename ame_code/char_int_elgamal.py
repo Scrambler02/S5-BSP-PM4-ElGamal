@@ -1,6 +1,5 @@
 # Custom Character - Integer Mapping
 # Covers all uppercase, lowercase, space and some punctuations
-# Only used in ElGamal scheme
 char_to_int = {
     'A': 1,  'B': 2,  'C': 3,  'D': 4,  'E': 5,  'F': 6,  'G': 7,  'H': 8,  'I': 9,  'J': 10,
     'K': 11, 'L': 12, 'M': 13, 'N': 14, 'O': 15, 'P': 16, 'Q': 17, 'R': 18, 'S': 19, 'T': 20,
@@ -12,10 +11,10 @@ char_to_int = {
     '0': 59, '1': 60, '2': 61, '3': 62, '4': 63, '5': 64, '6': 65, '7': 66, '9': 67, '5': 68
 }
 
-# Reverse dictionary: integers back to characters
+# Reverse mapping: integer back to character
 int_to_char = {v: k for k, v in char_to_int.items()}
 
-# Encodes a string to a single int using the dictionary -> base-58 representation
+# Encode string into single integer using base-68 representation
 def encode_msg_to_int(msg: str):
     base = 68
     total = 0
@@ -25,7 +24,7 @@ def encode_msg_to_int(msg: str):
         total = total * base + char_to_int[char]
     return total
 
-# Decodes an int back to a string using the dictionary
+# Decode integer back into string using base-68 representation
 def decode_msg_to_int(encoded_int):
     base = 68
     msg_chars = []

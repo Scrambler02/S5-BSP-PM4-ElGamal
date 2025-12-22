@@ -1,7 +1,6 @@
 # Pixel Mask 4.0 - Output Texts
 
-# ======== DEFAULT TEXTS ======== #
-
+# ------- DEFAULT TEXTS ------- #
 
 about_info = """Pixel Mask\n   Version 3.0\n   Written in Python version 3.12.3
    Developed by Peter Roenne and Kim Tereba\n   Uni.lu"""
@@ -58,73 +57,86 @@ stego_help = """
       • To cancel any of these operations enter 'cancel'\n"""
 
 
-# ======== AME TEXTS ======== #
-
+# ------- AME TEXTS ------- #
 
 ame_cmd_txt = """#PM: Below are all possible options for ame commands:
-   ame mode\n   ame commands\n   ame\n   ame help\n   mode?\n   about\n   create keys\n   load pk\n   load sk\n   encrypt
-   load k\n   load dk\n   decrypt\n   ame decrypt\n   cancel\n   clear\n   exit\n
+   ame mode\n   ame commands\n   ame\n   ame help\n   mode?\n   about\n   create keys\n   load pk\n   load sk   
+   load ska\n   encrypt\n   decrypt\n   ame decrypt\n   cancel\n   clear\n   exit\n
 """
 
-ame_text = """The anamorphic encryption technique is a method of embedding two messages in one ciphertext,
-   such that two different decryption keys reveal two different messages. 
-   This application uses RSA and mathematical operations for a hybrid encryption scheme, inspired by 
-   anamorphic encryption but not following the standard protocol.
+ame_text = """Anamorphic encryption is a technique that allows two different messages to be embedded
+   in a single ciphertext, where different keys reveal different messages.
+   This application implements a custom anamorphic encryption scheme based on
+   ElGamal-style public-key cryptography and symmetric state parameters.
+   WARNING: Only works on messages containing words < 7 characters long.
 
    How does it work?
-   • The receiver begins by creating public and private RSA keys
-      ◦ The public key will be used by the sender to wrap (encrypt) the anamorphic keys
-      ◦ The private key will be used later by the receiver to unwrap (decrypt) them
+   • The receiver begins by creating a set of AME keys
+      ◦ A public key (pk) - for encryption
+      ◦ A secret key (sk) - to reveal the decoy message
+      ◦ A double key (ska) - to reveal the secret message
 
-   • The receiver shares the public key with the sender
-      ◦ Can be done openly since public key doesn't reveal any messages
+   • The public key can be shared openly
+      ◦ It does not reveal either message on its own
 
-   • The sender loads the public key and then encrypts two messages:
-      ◦ Cover message
-      ◦ Secret message
+   • The sender loads the public key and starts encryption
+      ◦ First, a decoy message is entered
+      ◦ Then, a secret message is entered
 
-   • The application returns a ciphertext and two anamorphic keys:
-      ◦ Key1 reveals the cover message
-      ◦ Key2 reveals the secret message
-      ◦ Both are wrapped using the receiver's public key
+   • The application generates:
+      ◦ A single ciphertext containing both messages
+      ◦ An initialization value (IV)
+      ◦ A state value (ST) used during encryption
 
-   • The sender shares the ciphertext and Key1 with the receiver
-      ◦ Key1 can be shared openly or securely, since it only reveals the cover message
-      ◦ Key2 must be shared securely (e.g. via Signal), because it unlocks the secret message
+   • The ciphertext, IV, and initial ST are saved to a file
+      ◦ This file can be shared openly
 
-   • The receiver unwraps the keys using their private key
-      ◦ Uses Key1 to read the cover message or Key2 to read the secret message
+   • Decryption depends on which key is used:
+      ◦ Using the secret key (sk) reveals the decoy message
+      ◦ Using the double key (ska) reveals the secret message
+
+   • The receiver chooses how to decrypt:
+      ◦ “decrypt” reveals the decoy message
+      ◦ “ame decrypt” reveals the secret message
+
+   This allows a harmless-looking message to be revealed under coercion,
+   while a different key exposes the true hidden message.
 """
 
+
 ame_help = """
-1. Receiver:
-   • Enter 'create keys' to generate:
-       ◦ RSA public key
-       ◦ RSA private key
-       ◦ Both are saved to rsa_keys folder on desktop
-   • Share the public key with sender
-       ◦ Can be done openly
-   • Keep the private key secure
+   1. Receiver:
+      • Enter 'create keys' to generate:
+         ◦ Public key (pk)
+         ◦ Secret key (sk)
+         ◦ Double key (ska)
+      • All keys are saved to the ame_keys folder on your desktop
+         ◦ public_key.txt
+         ◦ secret_key.txt
+         ◦ double_key.txt
+      • Share the public key with the sender
+         ◦ Can be done openly
+      • Keep the secret key and double key secure
 
-2. Sender:
-   • Enter 'load pk' to use the receiver's public key
-   • Enter 'encrypt' to encode two messages:
-       ◦ Enter the cover message
-       ◦ Enter the secret message
-   • This returns the ciphertext and two AME keys:
-       ◦ Wrapped Key1 as k.txt file (for cover message)
-       ◦ Wrapped Key2 as dk.txt file (for secret message)
-       ◦ Both are saved to ame_keys folder on desktop
-   • Send ciphertext + Key1 + Key2 to the receiver
-       ◦ Key1 can be shared openly
-       ◦ Key2 must be shared securely (e.g. via Signal)
+   2. Sender:
+      • Enter 'load pk' to load the receiver's public key
+      • Enter 'encrypt' to start AME encryption:
+         ◦ Enter the decoy message
+         ◦ Enter the secret message
+      • The application generates:
+         ◦ A single ciphertext containing both messages
+         ◦ An initialization value (IV)
+         ◦ A state value (ST)
+      • The ciphertext, IV, and initial ST are saved to a file:
+         ◦ ct.txt in the ciphertext folder on your desktop
+      • Send the ciphertext file to the receiver
 
-3. Receiver:
-   • Enter 'load sk' to load your private key
-   • Enter 'load k' and 'load dk' to load the wrapped AME keys
-       ◦ During decryption the private key will unwrap both keys
-   • Enter 'decrypt' to read the cover message:
-       ◦ Enter ciphertext + provide Key1
-   • Enter 'ame decrypt' to read the secret message:
-       ◦ Enter ciphertext + provide Key2
+   3. Receiver:
+      • Load the appropriate key:
+         ◦ Enter 'load sk' to load the secret key (decoy message)
+         ◦ Enter 'load ska' to load the double key (secret message)
+      • Enter 'decrypt' to reveal the decoy message
+         ◦ Uses the secret key (sk)
+      • Enter 'ame decrypt' to reveal the secret message
+         ◦ Uses the double key (sk_a)
 """

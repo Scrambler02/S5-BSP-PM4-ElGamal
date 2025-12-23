@@ -12,8 +12,7 @@ import crypt_code.encryption as enc
 from stego_code import lsb_stego as lsb
 from stego_code import dct_stego as dct
 from ame_code import elgamal_ame as ame
-from password_manager import set_password
-from login import run_login_screen
+from password_manager import set_password, run_login_screen
 
 
 class PixelMaskApp4(tk.Tk):

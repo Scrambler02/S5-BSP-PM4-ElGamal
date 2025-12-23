@@ -15,7 +15,11 @@ The updated system is faster and more robust than earlier versions, making anamo
 - **stego_code folder:** Contains LSB and DCT steganography code
 - **ui_code folder:** Contains text for PM help and explanation commands
 - **assets folder:** Contains Echo sprites for every mode
+- **requirements.txt:** Contains external package names for venv
+- **Makefile:** Commands to create venv, install dependencies, and run app
 
 ## Running Pixel Mask 4.0
-
-Just run the PM4.py file.
+Enter the following Makefile commands:  
+- **make venv** - creates venv  
+- **make install** - installs dependencies  
+- **make run** - launches app

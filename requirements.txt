@@ -1,0 +1,6 @@
+pycryptodome
+cryptography
+numpy
+Pillow
+scipy
+darkdetect

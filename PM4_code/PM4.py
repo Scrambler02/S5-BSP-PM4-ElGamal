@@ -12,7 +12,7 @@ import crypt_code.encryption as enc
 from stego_code import lsb_stego as lsb
 from stego_code import dct_stego as dct
 from ame_code import elgamal_ame as ame
-from password_manager import set_password, run_login_screen
+from password_manager import run_login_screen
 
 
 class PixelMaskApp4(tk.Tk):
@@ -52,9 +52,6 @@ class PixelMaskApp4(tk.Tk):
         self.current_frame = 0
         self.load_avatar_frames()
         self.start_avatar_animation()
-        # Current password
-        set_password("pm4")
-
 
 # ------- GUI SETUP + KEYBOARD SHORTCUTS ------- #
 
@@ -719,8 +716,10 @@ class PixelMaskApp4(tk.Tk):
         text_widget.pack(fill=tk.BOTH, expand=True)
 
 if __name__ == "__main__":
-    if run_login_screen():
-        app = PixelMaskApp4()
-        app.mainloop()
-    else:
-        print("Access denied.")
+    # Run login screen
+    if not run_login_screen():
+        exit()  # Stop app if login fails
+
+    # Start main app
+    app = PixelMaskApp4()
+    app.mainloop()

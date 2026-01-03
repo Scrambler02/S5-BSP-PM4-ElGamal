@@ -10,15 +10,18 @@ def get_password_file():
     os.makedirs(folder, exist_ok=True) # Create folder if doesn't exist
     return os.path.join(folder, "password.json")
 
+def hash_password(password: str, salt: bytes):
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode(),
+        salt,
+        200000
+    )
+
 # Hash + store new password
 def set_password(password: str):
     salt = os.urandom(16) # Generate random salt
-    hashed = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode(),
-        salt, 
-        200000 # Number of hash iterations
-    )
+    hashed = hash_password(password, salt)
 
     # Store salt and hash as hex strings
     data = {
@@ -56,51 +59,79 @@ def verify_password(password: str):
     stored_hash = stored["hash"]
 
     # Hash input password using stored salt
-    new_hash = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode(),
-        salt,
-        200000
-    )
+    new_hash = hash_password(password, salt)
 
     # Compare hashes
     return new_hash == stored_hash
 
 
-# Display login window and verify user password
+# Display login window to verify password (or create password on first run)
 def run_login_screen():
+    stored_pw = load_password_data()
+    first_run = stored_pw is None # No password saved yet
+
     login = tk.Tk()
-    login.title("Pixel Mask Login")
-    login.geometry("300x150+600+300")
+    login.title("Create Password" if first_run else "Pixel Mask Login")
+    login.geometry("300x180+600+300")
     login.resizable(False, False)
 
-    # Password prompt
-    tk.Label(login, text="Enter password:").pack(pady=10)
+    # Prompt text
+    label_text = "Create a password:" if first_run else "Enter password:"
+    tk.Label(login, text=label_text).pack(pady=10)
+
+    # Password entry
     pw_entry = tk.Entry(login, show="*", width=25)
     pw_entry.pack()
     pw_entry.focus()
-    # Style password entry
-    pw_entry.config(bg='#1E1E1E', fg='#FFFFFF', highlightthickness=3, borderwidth=1) 
 
-    # Store login result
-    result = {"success": False}
+    # Confirm password only on first run
+    confirm_entry = None
+    if first_run:
+        tk.Label(login, text="Confirm password:").pack(pady=5)
+        confirm_entry = tk.Entry(login, show="*", width=25)
+        confirm_entry.pack()
 
-    # Attempt login when button pressed or Enter key used
-    def try_login(event=None):
-        pw = pw_entry.get()
-        if verify_password(pw):
-            result["success"] = True
-            login.destroy() # Close login window on success
-        else:
-            error_label.config(text="Incorrect password", fg="red")
-
-    # Bind Enter key and Login button
-    pw_entry.bind("<Return>", try_login)
-    tk.Button(login, text="Login", command=try_login).pack(pady=10)
-    
     # Error message label
     error_label = tk.Label(login, text="", fg="red")
-    error_label.pack()
+    error_label.pack(pady=5)
+
+    result = {"success": False}
+
+    # Handle login or password creation
+    def submit(event=None):
+        pw = pw_entry.get()
+
+        if not pw:
+            error_label.config(text="Password cannot be empty")
+            return
+
+        if first_run:
+            # Create and store password
+            if pw != confirm_entry.get():
+                error_label.config(text="Passwords do not match")
+                return
+
+            set_password(pw)
+            result["success"] = True
+            login.destroy()
+        else:
+            # Verify existing password
+            if verify_password(pw):
+                result["success"] = True
+                login.destroy()
+            else:
+                error_label.config(text="Incorrect password")
+
+    # Bind Enter key and button
+    pw_entry.bind("<Return>", submit)
+    if confirm_entry:
+        confirm_entry.bind("<Return>", submit)
+
+    tk.Button(
+        login,
+        text="Create Password" if first_run else "Login",
+        command=submit
+    ).pack(pady=10)
 
     login.mainloop()
     return result["success"]

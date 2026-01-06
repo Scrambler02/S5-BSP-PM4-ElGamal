@@ -81,10 +81,10 @@ class PixelMaskApp4(tk.Tk):
         self.animation_frames = []
         # Avatar label
         self.avatar_label = tk.Label(self.left_panel, bg="#2E2E2E")
-        self.avatar_label.place(x=-14, y=70)
+        self.avatar_label.place(x=15, y=70)
         # Avatar name label
         self.avatar_name = tk.Label(self.left_panel, text="Echo", font=("SF Mono", 20))
-        self.avatar_name.place(x=162, y=510)
+        self.avatar_name.place(x=183, y=520)
 
         # Right Panel - Main CLI
         self.right_panel = tk.Frame(self)
